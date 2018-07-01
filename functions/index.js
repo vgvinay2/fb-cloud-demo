@@ -60,7 +60,7 @@ exports.uploadFile = functions.https.onRequest((req, res) => {
       uploadData = { file: filepath, type: mimetype };
       file.pipe(fs.createWriteStream(filepath));
     });
-console.log("I am stuck");
+//console.log("I am stuck");
     busboy.on("finish", () => {
       const bucket = gcs.bucket("fb-cloud-demo.appspot.com");
       bucket
@@ -85,4 +85,12 @@ console.log("I am stuck");
     });
     busboy.end(req.rawBody);
   })
+});
+
+exports.onDataAdded = functions.database.ref('/message/{id}').onCreate(event => {
+  const data = event.data.val();
+  const newData = {
+      msg: event.params.id + '-' + data.msg.toUpperCase()
+  };
+  return event.data.ref.child('copiedData').set(newData);
 });
