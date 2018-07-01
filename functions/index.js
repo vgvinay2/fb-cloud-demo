@@ -1,9 +1,16 @@
 const functions = require('firebase-functions');
-const gcs = require('@google-cloud/storage')();
+
 const os = require("os");
 const path = require("path");
 const spawn = require("child-process-promise").spawn;
-
+const cors = require("cors")({ origin: true });
+const Busboy = require("busboy");
+const fs = require("fs");
+const gcconfig = {
+  projectId: "fb-cloud-demo",
+  keyFilename: "fb-cloud-demo-firebase-adminsdk-0e1x8-15282c7bfa.json"
+};
+const gcs = require('@google-cloud/storage')(gcconfig);
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
 //
@@ -38,13 +45,44 @@ exports.onFileChange = functions.storage.object().onFinalize((object) => {
     return finalData;
 });
 
-exports.uploadFile = functions.https.onRequest((request, response) => {
-    if(request.method !=='POST')
-      return response.status(500).json({
-        message: "Failed" 
+exports.uploadFile = functions.https.onRequest((req, res) => {
+   cors(req, res, () => {
+    if (req.method !== "POST") {
+      return res.status(500).json({
+        message: "Not allowed"
       });
-      
-    response.status(200).json({
-      message: "File Uploaded" 
+    }
+    const busboy = new Busboy({ headers: req.headers });
+    let uploadData = null;
+
+    busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
+      const filepath = path.join(os.tmpdir(), filename);
+      uploadData = { file: filepath, type: mimetype };
+      file.pipe(fs.createWriteStream(filepath));
     });
+console.log("I am stuck");
+    busboy.on("finish", () => {
+      const bucket = gcs.bucket("fb-cloud-demo.appspot.com");
+      bucket
+        .upload(uploadData.file, {
+          uploadType: "media",
+          metadata: {
+            metadata: {
+              contentType: uploadData.type
+            }
+          }
+        })
+        .then(() => {
+         return res.status(200).json({
+            message: "It worked!"
+          });
+        })
+        .catch(err => {
+          res.status(500).json({
+            error: err
+          });
+        });
+    });
+    busboy.end(req.rawBody);
+  })
 });
